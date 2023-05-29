@@ -13,21 +13,6 @@ resource "aws_cloudfront_origin_access_identity" "default" {
   comment = module.origin_label.id
 }
 
-module "logs" {
-  source  = "cloudposse/s3-log-storage/aws"
-  version = "0.26.0"
-
-  enabled                  = module.this.enabled && var.logging_enabled && length(var.log_bucket_fqdn) == 0
-  attributes               = compact(concat(module.this.attributes, ["origin", "logs"]))
-  lifecycle_prefix         = var.log_prefix
-  standard_transition_days = var.log_standard_transition_days
-  glacier_transition_days  = var.log_glacier_transition_days
-  expiration_days          = var.log_expiration_days
-  force_destroy            = var.log_force_destroy
-
-  context = module.this.context
-}
-
 resource "aws_cloudfront_distribution" "default" {
   #bridgecrew:skip=BC_AWS_GENERAL_27:Skipping `Ensure CloudFront distribution has WAF enabled` because AWS WAF is indeed configurable and is managed via `var.web_acl_id`.
   count = module.this.enabled ? 1 : 0
@@ -39,14 +24,6 @@ resource "aws_cloudfront_distribution" "default" {
   default_root_object = var.default_root_object
   price_class         = var.price_class
 
-  dynamic "logging_config" {
-    for_each = var.logging_enabled ? ["true"] : []
-    content {
-      include_cookies = var.log_include_cookies
-      bucket          = length(var.log_bucket_fqdn) > 0 ? var.log_bucket_fqdn : module.logs.bucket_domain_name
-      prefix          = var.log_prefix
-    }
-  }
 
   aliases = var.aliases
 
@@ -154,8 +131,6 @@ resource "aws_cloudfront_distribution" "default" {
         }
       }
     }
-
-    realtime_log_config_arn = var.realtime_log_config_arn
 
     dynamic "lambda_function_association" {
       for_each = var.lambda_function_association
